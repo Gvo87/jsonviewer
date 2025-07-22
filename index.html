@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JSON Formatter</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="tab-container">
+        <div class="tab-buttons">
+            <button onclick="switchTab('text')" class="active">Text</button>
+            <button onclick="switchTab('view')">View</button>
+            <button onclick="showAboutModal()" class="about-button">About</button>
+        </div>
+        
+        <div class="button-group">
+            <button id="formatButton" onclick="formatJSON()">Format JSON</button>
+            <button onclick="pasteJSON()">Paste</button>
+            <button onclick="copyJSON()">Copy</button>
+            <button onclick="clearJSON()">Clear</button>
+            <button onclick="minifyJSON()">Minify</button>
+            <button onclick="showLoadModal()" style="margin-left: 16px;">Load JSON</button>
+        </div>
+        
+        <div class="tab-content">
+            <div id="textTab" class="tab-pane active">
+                <textarea id="jsonInput" 
+                    placeholder="Paste your JSON here... (Your code is not stored anywhere - processing happens in your browser)"
+                    onfocus="hidePlaceholder(event)" 
+                    onblur="showPlaceholder(event)">
+                </textarea>
+            </div>
+            
+            <div id="viewTab" class="tab-pane">
+                <pre id="formattedOutput"></pre>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add modal HTML -->
+    <div id="loadModal" class="modal">
+        <div class="modal-content">
+            <h3>Load JSON from URL</h3>
+            <input type="url" id="jsonUrl" placeholder="Enter URL here..." />
+            <div class="modal-buttons">
+                <button onclick="loadJSON()">Load</button>
+                <button onclick="closeModal()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add About modal HTML -->
+    <div id="aboutModal" class="modal">
+        <div class="modal-content">
+            <h3>About JSON Formatter</h3>
+            <div class="about-content">
+                <p>A simple, secure JSON formatting tool that works entirely in your browser. 
+                   Your data never leaves your device - all processing happens locally.</p>
+                
+                <h4>Features:</h4>
+                <ul>
+                    <li>Format and validate JSON</li>
+                    <li>Load JSON from URL</li>
+                    <li>Copy/Paste functionality</li>
+                    <li>Secure local processing</li>
+                </ul>
+
+                <h4>Contact:</h4>
+                <p>Found a bug or have a suggestion? Please reach out:</p>
+                <ul>
+                    <li>Email: <a href="mailto:gg_gevorg@mail.ru">gg_gevorg@mail.ru</a></li>
+                    <li>GitHub: <a href="https://github.com/yourusername" target="_blank">github.com/yourusername</a></li>
+                </ul>
+            </div>
+            <div class="modal-buttons">
+                <button onclick="closeAboutModal()">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function switchTab(tabName) {
+            // Hide all tabs
+            document.querySelectorAll('.tab-pane').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // Deactivate all buttons
+            document.querySelectorAll('.tab-buttons button').forEach(button => {
+                button.classList.remove('active');
+            });
+            
+            // Show selected tab
+            document.getElementById(tabName + 'Tab').classList.add('active');
+            
+            // Activate selected button
+            event.target.classList.add('active');
+        }
+
+        function formatJSON() {
+            const input = document.getElementById('jsonInput').value.trim();
+            const jsonInput = document.getElementById('jsonInput');
+            const formattedOutput = document.getElementById('formattedOutput');
+
+            if (!input) {
+                alert('Please enter JSON or NDJSON to format');
+                return;
+            }
+
+            try {
+                let formatted;
+                if (input.includes('\n')) {
+                    // Handle NDJSON
+                    const lines = input.split('\n').map(line => {
+                        try {
+                            return JSON.stringify(JSON.parse(line), null, 2);
+                        } catch (e) {
+                            return `Invalid JSON: ${line}`;
+                        }
+                    });
+                    formatted = lines.join('\n\n'); // Join formatted lines with double newlines for separation
+                } else {
+                    // Handle standard JSON
+                    formatted = JSON.stringify(JSON.parse(input), null, 2);
+                }
+
+                jsonInput.value = formatted;   
+                formattedOutput.innerHTML = formatted;
+            } catch (error) {
+                alert('Invalid JSON: ' + error.message);
+            }
+        }
+
+        async function pasteJSON() {
+            try {
+                const text = await navigator.clipboard.readText();
+                document.getElementById('jsonInput').value = text;
+            } catch (error) {
+                alert('Failed to paste: ' + error.message);
+            }
+        }
+
+        async function copyJSON() {
+            const activeTab = document.querySelector('.tab-pane.active');
+            const textToCopy = activeTab.id === 'viewTab' 
+                ? document.getElementById('formattedOutput').textContent
+                : document.getElementById('jsonInput').value;
+            
+            try {
+                await navigator.clipboard.writeText(textToCopy);
+            } catch (error) {
+                alert('Failed to copy: ' + error.message);
+            }
+        }
+
+        function clearJSON() {
+            const activeTab = document.querySelector('.tab-pane.active');
+            document.getElementById('jsonInput').value = '';
+            document.getElementById('formattedOutput').textContent = '';
+            
+            // Switch to text tab only if the active tab is not "text"
+            if (activeTab.id !== 'textTab') {
+                switchTab('text');
+            }
+        }
+
+        function showLoadModal() {
+            document.getElementById('loadModal').style.display = 'block';
+            document.getElementById('jsonUrl').focus();
+        }
+
+        function closeModal() {
+            document.getElementById('loadModal').style.display = 'none';
+            document.getElementById('jsonUrl').value = '';
+        }
+
+        async function loadJSON() {
+            const url = document.getElementById('jsonUrl').value.trim();
+            if (!url) {
+                alert('Please enter a URL');
+                return;
+            }
+
+            try {
+                const response = await fetch(url);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.text();
+                document.getElementById('jsonInput').value = data;
+                closeModal();
+                
+                // Try to format the loaded JSON
+                try {
+                    JSON.parse(data); // Validate JSON
+                    formatJSON();
+                } catch (e) {
+                    // If not valid JSON, just show in text area
+                    switchTab('text');
+                }
+            } catch (error) {
+                alert('Failed to load JSON: ' + error.message);
+            }
+        }
+
+        // Add keyboard support for the modal
+        document.getElementById('jsonUrl').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                loadJSON();
+            }
+            if (e.key === 'Escape') {
+                closeModal();
+            }
+        });
+
+        function showAboutModal() {
+            document.getElementById('aboutModal').style.display = 'block';
+        }
+
+        function closeAboutModal() {
+            document.getElementById('aboutModal').style.display = 'none';
+        }
+
+        // Add click outside to close for both modals
+        window.onclick = function(event) {
+            if (event.target.className === 'modal') {
+                event.target.style.display = 'none';
+                // Clear URL input if it's the load modal
+                if (event.target.id === 'loadModal') {
+                    document.getElementById('jsonUrl').value = '';
+                }
+            }
+        }
+
+        // Add Escape key support for both modals
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                document.getElementById('loadModal').style.display = 'none';
+                document.getElementById('aboutModal').style.display = 'none';
+                document.getElementById('jsonUrl').value = '';
+            }
+        });
+
+        // Add these new functions
+        function hidePlaceholder(event) {
+            event.target.placeholder = '';
+        }
+
+        function showPlaceholder(event) {
+            if (!event.target.value) {
+                event.target.placeholder = 'Paste your JSON here... (Your code is not stored anywhere - processing happens in your browser)';
+            }
+        }
+
+        // Add event listeners when the document loads
+        document.addEventListener('DOMContentLoaded', function() {
+            const jsonInput = document.getElementById('jsonInput');
+            jsonInput.addEventListener('focus', hidePlaceholder);
+            jsonInput.addEventListener('blur', showPlaceholder);
+        });
+
+        function minifyJSON() {
+            const input = document.getElementById('jsonInput').value.trim();
+            if (!input) {
+                alert('Please enter JSON or NDJSON to minify');
+                return;
+            }
+
+            try {
+                let minified;
+                if (input.includes('\n')) {
+                    // Handle NDJSON
+                    const lines = input.split('\n').map(line => {
+                        try {
+                            return JSON.stringify(JSON.parse(line));
+                        } catch (e) {
+                            return `Invalid JSON: ${line}`;
+                        }
+                    });
+                    minified = lines.join('\n'); // Join minified lines with newlines
+                } else {
+                    // Handle standard JSON
+                    minified = JSON.stringify(JSON.parse(input));
+                }
+
+                document.getElementById('jsonInput').value = minified;   
+            } catch (error) {
+                alert('Invalid JSON: ' + error.message);
+            }
+        }
+
+        
+    </script>
+</body>
+</html> 
